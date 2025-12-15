@@ -5,13 +5,14 @@ import 'package:currency/model/currency.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert' as convert;
 
+import 'package:intl/intl.dart';
+
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
@@ -22,7 +23,7 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: [
-        Locale('fa'), // farsi
+        Locale('fa'),
       ],
       theme: ThemeData(
         fontFamily: 'dana',
@@ -62,35 +63,40 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   List<Currency> currency = [];
 
-  Future getResponse(BuildContext cntx) async {
+  Future getResponse() async {
     var url =
         "https://sasansafari.com/flutter/api.php?access_key=flutter123456";
     var value = await http.get(Uri.parse(url));
+    if (!mounted) return;
     if (currency.isEmpty) {
       if (value.statusCode == 200) {
+        _showSnackBar(context , "بروزرسانی با موفقیت انجام شد.");
         var jsonResponse = convert.jsonDecode(value.body) as List;
         if (jsonResponse.isNotEmpty) {
-          for (int i = 0; i < jsonResponse.length; i++) {
-            setState(() {
-              currency.add(
-                Currency(
-                  id: jsonResponse[i]['id'],
-                  title: jsonResponse[i]['title'],
-                  price: jsonResponse[i]['price'],
-                  changes: jsonResponse[i]['changes'],
-                  status: jsonResponse[i]['status'],
-                ),
-              );
-            });
-          }
+          setState(() {
+  currency = jsonResponse.map((item) => Currency(
+    id: item['id'],
+    title: item['title'],
+    price: item['price'],
+    changes: item['changes'],
+    status: item['status'],
+  )).toList();
+});
         }
       }
     }
+    return value;
+  }
+  
+
+  @override
+  void initState() {
+    super.initState();
+    getResponse();
   }
 
   @override
   Widget build(BuildContext context) {
-    getResponse(context);
 
     return Scaffold(
       backgroundColor: Color.fromARGB(255, 243, 243, 243),
@@ -137,7 +143,6 @@ class _HomeState extends State<Home> {
               Text(
                 " نرخ ارزها در معاملات نقدی و رایج روزانه است معاملات نقدی معاملاتی هستند که خریدار و فروشنده به محض انجام معامله، ارز و ریال را با هم تبادل می نمایند.",
                 style: Theme.of(context).textTheme.bodyLarge,
-                textDirection: TextDirection.rtl,
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 20, 0, 0),
@@ -169,32 +174,13 @@ class _HomeState extends State<Home> {
               ),
               SizedBox(
                 width: double.infinity,
-                height: 500,
-                child: ListView.separated(
-                  physics: BouncingScrollPhysics(),
-                  itemCount: currency.length,
-                  itemBuilder: (BuildContext context, int postion) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
-                      child: MyItem(postion, currency),
-                    );
-                  },
-                  separatorBuilder: (BuildContext context, int index) {
-                    if (index % 12 == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
-                        child: Advertisement(),
-                      );
-                    } else {
-                      return SizedBox.shrink();
-                    }
-                  },
-                ),
+                height: MediaQuery.of(context).size.height/2,
+                child: listFutureBuilder(context),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
                 child: Container(
-                  height: 50,
+                  height: MediaQuery.of(context).size.height/16,
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: Color.fromARGB(255, 232, 232, 232),
@@ -204,17 +190,17 @@ class _HomeState extends State<Home> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       SizedBox(
-                        height: 50,
+                        height: MediaQuery.of(context).size.height/16,
                         child: TextButton.icon(
                           style: ButtonStyle(
                             backgroundColor: WidgetStatePropertyAll(
                               Color.fromARGB(255, 202, 193, 255),
                             ),
                           ),
-                          onPressed: () => _showSnackBar(
-                            context,
-                            "بروزرسانی با موفقیت انجام شد.",
-                          ),
+                          onPressed: () {
+                            currency.clear();
+                            listFutureBuilder(context);
+                          },
                           icon: Padding(
                             padding: const EdgeInsets.fromLTRB(0, 0, 6, 0),
                             child: Icon(
@@ -245,8 +231,38 @@ class _HomeState extends State<Home> {
     );
   }
 
+  FutureBuilder<dynamic> listFutureBuilder(BuildContext context) {
+    return FutureBuilder(
+                builder: (context, snapshot) {
+                  return snapshot.hasData ? 
+                  ListView.separated(
+                  physics: BouncingScrollPhysics(),
+                  itemCount: currency.length,
+                  itemBuilder: (BuildContext context, int postion) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                      child: MyItem(postion, currency),
+                    );
+                  },
+                  separatorBuilder: (BuildContext context, int index) {
+                    if (index % 12 == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                        child: Advertisement(),
+                      );
+                    } else {
+                      return SizedBox.shrink();
+                    }
+                  },
+                ) : Center(child: CircularProgressIndicator(),);
+                },
+                future: getResponse(),
+              );
+  }
+
   String _getTime() {
-    return "20:45";
+    DateTime now = DateTime.now();
+    return getFarsiNumber(DateFormat('kk:mm:ss').format(now));
   }
 }
 
@@ -282,11 +298,11 @@ class MyItem extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           Text(
-            currency[postion].price!,
+            getFarsiNumber( currency[postion].price.toString()),
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           Text(
-            currency[postion].changes!,
+            getFarsiNumber(currency[postion].changes.toString()),
             style: currency[postion].status == "n"
                 ? Theme.of(context).textTheme.displaySmall
                 : Theme.of(context).textTheme.headlineLarge,
@@ -318,4 +334,16 @@ class Advertisement extends StatelessWidget {
       ),
     );
   }
+}
+
+String getFarsiNumber(String number){
+  const en = ['0' , '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9'];
+  const fa = ['۰' , '۱' , '۲' , '۳' , '۴' , '۵' , '۶' , '۷' , '۸' , '۹'];
+
+  for (var element in en) {
+    number = number.replaceAll(element, fa[en.indexOf(element)]);
+
+  }
+
+  return number;
 }
